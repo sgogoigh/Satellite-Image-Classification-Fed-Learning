@@ -32,10 +32,20 @@ def build_scheduler(optimizer, cfg, total_epochs: int):
     return None
 
 
-def train_one_epoch(model, loader, optimizer, criterion, device) -> float:
+def train_one_epoch(model, loader, optimizer, criterion, device,
+                    progress: bool = False, desc: str = "") -> float:
+    """One epoch of SGD. Set ``progress=True`` for a live per-batch tqdm bar (interactive
+    centralized/local training); leave False inside FL client updates to avoid noise."""
     model.train()
     total, n = 0.0, 0
-    for x, y in loader:
+    iterator = loader
+    if progress:
+        try:
+            from tqdm.auto import tqdm
+            iterator = tqdm(loader, desc=desc, leave=False)
+        except ImportError:
+            iterator = loader
+    for x, y in iterator:
         x, y = x.to(device), y.to(device)
         optimizer.zero_grad()
         loss = criterion(model(x), y)
@@ -43,6 +53,8 @@ def train_one_epoch(model, loader, optimizer, criterion, device) -> float:
         optimizer.step()
         total += float(loss.item()) * x.size(0)
         n += x.size(0)
+        if progress and hasattr(iterator, "set_postfix"):
+            iterator.set_postfix(loss=f"{total / max(n, 1):.4f}")
     return total / max(n, 1)
 
 
@@ -79,10 +91,13 @@ def evaluate(model, loader, device, num_classes: int, class_names=None) -> dict:
     return out
 
 
-def fit(model, train_loader, val_loader, cfg, device, criterion=None, verbose=True) -> dict:
+def fit(model, train_loader, val_loader, cfg, device, criterion=None,
+        verbose=True, progress=True) -> dict:
     """Train with early stopping on val accuracy; restore best weights. Returns history.
 
-    Reports gradient-step / epoch counts so budget parity (gate G7) is auditable.
+    ``progress=True`` shows a live per-batch tqdm bar each epoch; ``verbose=True`` prints a
+    per-epoch summary line (flushed so Colab renders it immediately). Reports gradient-step /
+    epoch counts so budget parity (gate G7) is auditable.
     """
     criterion = criterion or nn.CrossEntropyLoss()
     optimizer = build_optimizer(model, cfg)
@@ -93,7 +108,8 @@ def fit(model, train_loader, val_loader, cfg, device, criterion=None, verbose=Tr
     steps_per_epoch = len(train_loader)
 
     for epoch in range(cfg.max_epochs):
-        loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
+        loss = train_one_epoch(model, train_loader, optimizer, criterion, device,
+                               progress=progress, desc=f"epoch {epoch+1}/{cfg.max_epochs}")
         if scheduler is not None:
             scheduler.step()
         val = evaluate(model, val_loader, device, cfg.num_classes)
@@ -103,7 +119,8 @@ def fit(model, train_loader, val_loader, cfg, device, criterion=None, verbose=Tr
         history["epochs_run"] = epoch + 1
         history["grad_steps"] += steps_per_epoch
         if verbose:
-            print(f"  epoch {epoch+1:>2}/{cfg.max_epochs}  train_loss={loss:.4f}  val_acc={acc:.4f}")
+            print(f"  epoch {epoch+1:>2}/{cfg.max_epochs}  train_loss={loss:.4f}  val_acc={acc:.4f}",
+                  flush=True)
         if acc > best_acc + cfg.early_stop_min_delta:
             best_acc, stale = acc, 0
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
@@ -111,7 +128,7 @@ def fit(model, train_loader, val_loader, cfg, device, criterion=None, verbose=Tr
             stale += 1
             if stale >= cfg.early_stop_patience:
                 if verbose:
-                    print(f"  early stop at epoch {epoch+1} (best val_acc={best_acc:.4f})")
+                    print(f"  early stop at epoch {epoch+1} (best val_acc={best_acc:.4f})", flush=True)
                 break
 
     if best_state is not None:

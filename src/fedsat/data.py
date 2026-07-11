@@ -280,9 +280,12 @@ def make_loader(hf_ds, indices, cfg: ExperimentConfig, train: bool,
     ds = IndexedHFDataset(hf_ds, indices, tf, client_transform=client_transform)
     if shuffle is None:
         shuffle = train
+    # persistent_workers keeps workers alive across the per-epoch iterator re-creation,
+    # which avoids the harmless-but-noisy "_MultiProcessingDataLoaderIter.__del__ ...
+    # can only test a child process" teardown spam seen in Colab notebooks.
     return DataLoader(ds, batch_size=cfg.batch_size, shuffle=shuffle,
                       num_workers=cfg.num_workers, pin_memory=(cfg.device == "cuda"),
-                      drop_last=False)
+                      persistent_workers=(cfg.num_workers > 0), drop_last=False)
 
 
 def pooled_indices(partition: dict, split: str) -> list[int]:
