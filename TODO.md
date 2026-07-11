@@ -75,13 +75,14 @@
 
 ## P4 — Proposed method: Personalized FTL  ·  notebook `04_proposed_pftl.ipynb`  (E4, E5)
 
-- [ ] Implement **FedBN** (keep BN layers local; exclude from aggregation) — custom Flower strategy (kills B6)
-- [ ] Implement optional personalized classifier head; optional FedProx term
-- [ ] Implement per-client **sensor-shift** simulation (seeded photometric/atmospheric transforms) — `src/fedsat/data.py` (Track A+)
-- [ ] E4 BN-policy ablation: {aggregate-BN, FedBN, GroupNorm} × {FedAvg, PFTL}, ≥5 seeds
-- [ ] E5 feature-shift ablation: shift on/off × {FedAvg, FedProx, PFTL}, ≥5 seeds
-- [ ] Compute mean ± 95% CI; paired Wilcoxon/t-test PFTL vs baselines — `src/fedsat/eval/stats.py`
-- [ ] **Exit:** each PFTL component's contribution isolated; claims only where CIs separate (honest reporting per PLAN §6.2)
+- [x] Implement **FedBN** (keep BN local, exclude from aggregation) + unified per-client `run_federated` — `fedsat/fl.py` (kills B6, tested)
+- [x] FedProx term composes with FedBN (FedBN+Prox); GroupNorm BN-free control via `norm='gn'`
+- [x] Per-client **sensor-shift** simulation (fixed photometric/atmospheric per client) — `fedsat/data.py` `SensorShift`/`build_client_shifts` (Track A+, tested)
+- [x] Metric = **mean per-client own-test accuracy** (defined for FedBN); val-based selection
+- [x] E4 BN-policy ablation {aggregate-BN, FedBN, GroupNorm} + E5 shift on/off, resumable, multi-seed
+- [x] Honest verdict cell (claim a win only where mean±std separates)
+- [ ] **RUN on Colab** (resumable; ~3–4 h at 3 seeds; preview with `SEEDS=[42]`) ← *next action for you*
+- [ ] **Exit:** FedBN's advantage under feature shift isolated with separated CIs — or reported honestly if not
 
 ## P5 — Scale & communication  ·  notebook `05_scale_and_comm.ipynb`  (E3, E8)
 
@@ -128,8 +129,9 @@
 | `00_setup_and_eda.ipynb` (P0) | ✅ **DONE (Colab)** | G1+G2 passed; partition `K10_alpha0.5_seed42` saved; artifacts in `outputs/P0-1/` |
 | `01_centralized_baseline.ipynb` (P1) | ✅ **DONE (Colab)** | G3 passed; **centralized test acc 0.9573, macro-F1 0.9567, κ 0.9525**; no class collapse |
 | `02_federated_fedavg.ipynb` (P2) | ✅ **G4 PASSED on Colab** | FedAvg IID 0.9765 vs centralized 0.9573; Flower integration verified (Ray backend blocked by Colab TF/protobuf pin — noted) |
-| `03_noniid_sweep.ipynb` (P3) | ✅ **ready to run** | resumable α-sweep, 4 regimes; FedProx + regimes in `fedsat/{fl,regimes}.py` (tested) |
-| P4–P7 notebooks | ⏳ pending | after P3 sweep runs |
+| `03_noniid_sweep.ipynb` (P3) | ✅ **RAN on Colab** | FedAvg 0.975→0.845 as α↓; FedProx +7pt at α=0.1; local-only global collapses 0.94→0.40 |
+| `04_proposed_pftl.ipynb` (P4) | ✅ **ready to run** | FedBN + sensor shift + BN-policy/shift ablations; `run_federated` + `SensorShift` in `fedsat/{fl,data}.py` (tested) |
+| P5–P7 notebooks | ⏳ pending | after P4 runs |
 
 > **P2 design note:** FedAvg runs in two layers — a **transparent, tested `run_fedavg` core** that
 > clears G4 reliably (no dependence on Flower version), plus an **optional pinned Flower parity**

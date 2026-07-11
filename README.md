@@ -38,7 +38,8 @@ Run the notebooks in order:
 | `notebooks/01_centralized_baseline.ipynb` | P1 | centralized ResNet-18 upper bound; overfit-one-batch gate (G3); full test metrics |
 | `notebooks/02_federated_fedavg.ipynb` | P2 | FedAvg (transparent core, evaluates global model each round) + **G4: FedAvg ≈ centralized on IID**; optional real Flower parity |
 | `notebooks/03_noniid_sweep.ipynb` | P3 | resumable Dirichlet-α sweep comparing centralized / local-only / FedAvg / FedProx |
-| P4–P7 | … | proposed method (FedBN), scale/comm, generalization, analysis |
+| `notebooks/04_proposed_pftl.ipynb` | P4 | proposed FedBN vs FedAvg/FedProx/GroupNorm under per-client sensor shift; BN-policy + shift ablations, multi-seed |
+| P5–P7 | … | scale/communication, cross-domain generalization, analysis |
 
 Notebooks 00 and 01 share the same `dataset / num_clients / alpha / seed` so 01 loads the exact
 partition saved by 00.
@@ -51,12 +52,12 @@ requirements.txt                          # Colab-friendly deps (torch ships wit
 src/fedsat/
   config.py    # typed ExperimentConfig (YAML round-trip)
   utils.py     # seeding, hashing, device, provenance
-  data.py      # EuroSAT loader + integrity gate + Dirichlet partition + splits + transforms
+  data.py      # EuroSAT loader + integrity gate + Dirichlet partition + splits + transforms + SensorShift
   models.py    # ResNet-18/50 builder, norm policy, multispectral stem
   engine.py    # centralized/local train + full-metric evaluation
-  fl.py        # transparent FedAvg / FedProx (val-based selection, comm + budget accounting)
+  fl.py        # FedAvg / FedProx / FedBN (run_fedavg + run_federated, per-client eval, budget/comm)
   regimes.py   # centralized + local-only baseline runners
-notebooks/     # thin Colab drivers (00, 01, 02, 03, …)
+notebooks/     # thin Colab drivers (00, 01, 02, 03, 04, …)
 ```
 
 ## License

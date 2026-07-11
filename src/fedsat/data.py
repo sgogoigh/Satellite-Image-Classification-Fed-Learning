@@ -243,6 +243,52 @@ def build_transform(input_size: int, train: bool,
     ])
 
 
+class SensorShift:
+    """Deterministic per-client photometric/atmospheric transform (PIL -> PIL) that *emulates* a
+    distinct sensor/atmosphere/season for a client — i.e. genuine **feature (covariate) shift** on
+    top of the label-distribution shift (PLAN §3.2, Track A+). Factors are FIXED per client, so the
+    shift is a stable domain, not augmentation noise. This is declared as simulated sensor variation.
+    """
+
+    def __init__(self, brightness=1.0, contrast=1.0, saturation=1.0, hue=0.0,
+                 gamma=1.0, blur_sigma=0.0):
+        self.brightness, self.contrast, self.saturation = brightness, contrast, saturation
+        self.hue, self.gamma, self.blur_sigma = hue, gamma, blur_sigma
+
+    def __call__(self, img):
+        import torchvision.transforms.functional as F
+        img = F.adjust_brightness(img, self.brightness)
+        img = F.adjust_contrast(img, self.contrast)
+        img = F.adjust_saturation(img, self.saturation)
+        if abs(self.hue) > 1e-6:
+            img = F.adjust_hue(img, self.hue)
+        if abs(self.gamma - 1.0) > 1e-6:
+            img = F.adjust_gamma(img, self.gamma)
+        if self.blur_sigma > 0:
+            img = F.gaussian_blur(img, kernel_size=3, sigma=self.blur_sigma)
+        return img
+
+
+def build_client_shifts(num_clients: int, seed: int = 0, strength: float = 1.0) -> dict:
+    """Return ``{client_id_str: SensorShift}`` — a fixed, distinct feature shift per client.
+    ``strength=0`` disables shift (returns empty dict → clients share the real distribution).
+    """
+    if strength <= 0:
+        return {}
+    rng = np.random.default_rng(seed)
+    shifts = {}
+    for cid in range(num_clients):
+        shifts[str(cid)] = SensorShift(
+            brightness=float(1.0 + strength * rng.uniform(-0.4, 0.4)),
+            contrast=float(1.0 + strength * rng.uniform(-0.4, 0.4)),
+            saturation=float(1.0 + strength * rng.uniform(-0.4, 0.4)),
+            hue=float(strength * rng.uniform(-0.08, 0.08)),
+            gamma=float(1.0 + strength * rng.uniform(-0.3, 0.3)),
+            blur_sigma=float(max(0.0, strength * rng.uniform(-0.5, 1.2))),
+        )
+    return shifts
+
+
 class IndexedHFDataset:
     """Torch-style dataset over a subset of a HF EuroSAT dataset.
 

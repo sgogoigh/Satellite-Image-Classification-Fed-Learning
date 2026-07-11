@@ -34,6 +34,19 @@ def state_nbytes(state: dict) -> int:
     return int(sum(t.numel() * t.element_size() for t in state.values()))
 
 
+def bn_state_keys(model) -> set:
+    """State-dict keys belonging to BatchNorm layers (weight/bias/running_mean/running_var/
+    num_batches_tracked). FedBN keeps exactly these **local** (never aggregated)."""
+    keys = set()
+    for name, module in model.named_modules():
+        if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+            for pname, _ in module.named_parameters(recurse=False):
+                keys.add(f"{name}.{pname}")
+            for bname, _ in module.named_buffers(recurse=False):
+                keys.add(f"{name}.{bname}")
+    return keys
+
+
 def _local_train(model, loader, cfg, device, local_epochs: int, mu: float = 0.0):
     """One client's local update. If ``mu > 0`` adds the FedProx proximal term
     ``(mu/2) * ||w - w_global||^2`` over the trainable weights (McMahan-style FedAvg when mu==0,
@@ -183,3 +196,119 @@ def run_fedavg(cfg, hf_ds, partition, class_names,
         "rounds": num_rounds, "local_epochs": local_epochs, "fraction_fit": fraction_fit,
     }
     return global_model, history, summary
+
+
+def run_federated(cfg, hf_ds, partition, class_names, num_rounds, local_epochs,
+                  fraction_fit: float = 1.0, mu: float = 0.0, keep_bn_local: bool = False,
+                  client_transforms=None, verbose: bool = True):
+    """Unified federated runner scored by **per-client own-test accuracy** (the deployment-relevant
+    metric under feature shift, and the only metric well-defined for FedBN).
+
+      * ``keep_bn_local=False`` → FedAvg (``mu==0``) or FedProx (``mu>0``): a single global model.
+      * ``keep_bn_local=True``  → **FedBN**: BatchNorm layers are kept per-client (never aggregated);
+        only non-BN weights are averaged. Each client is evaluated with the shared weights + its own
+        BN (a personalized model).
+
+    ``client_transforms``: optional ``{client_id_str: callable}`` applied to each client's PIL images
+    (the per-client sensor-shift simulation) so clients differ in *feature* distribution.
+
+    Selection is by **mean per-client validation accuracy** (no test peeking). Returns
+    ``(history, summary)`` with mean/worst per-client test accuracy at the selected round.
+    """
+    device = cfg.device
+
+    def new_model():
+        return build_model(cfg.backbone, cfg.num_classes, cfg.pretrained,
+                           cfg.in_channels, cfg.norm).to(device)
+
+    scratch = new_model()
+    bn_keys = bn_state_keys(scratch) if keep_bn_local else set()
+    ctf = client_transforms or {}
+
+    client_ids = sorted(partition["clients"].keys(), key=int)
+    train_loaders = {c: make_loader(hf_ds, partition["clients"][c]["train"], cfg, train=True,
+                                    client_transform=ctf.get(c)) for c in client_ids}
+    val_loaders = {c: make_loader(hf_ds, partition["clients"][c]["val"], cfg, train=False,
+                                  client_transform=ctf.get(c)) for c in client_ids}
+    test_loaders = {c: make_loader(hf_ds, partition["clients"][c]["test"], cfg, train=False,
+                                   client_transform=ctf.get(c)) for c in client_ids}
+    train_sizes = {c: len(partition["clients"][c]["train"]) for c in client_ids}
+
+    global_state = _clone_state(scratch)
+    client_state = {c: {k: v.clone() for k, v in global_state.items()} for c in client_ids}
+
+    def personalized_state(c):
+        if keep_bn_local:
+            return {k: (client_state[c][k] if k in bn_keys else global_state[k]) for k in global_state}
+        return global_state
+
+    def eval_client(c, loader):
+        scratch.load_state_dict({k: v.to(device) for k, v in personalized_state(c).items()})
+        return evaluate(scratch, loader, device, cfg.num_classes, class_names)
+
+    model_mb = state_nbytes(global_state) / (1024 ** 2)
+    steps_per_epoch_equiv = max(1, int(np.ceil(sum(train_sizes.values()) / cfg.batch_size)))
+    rng = np.random.default_rng(cfg.seed + 999)
+    history, comm_cum, grad_steps = [], 0.0, 0
+    best = {"val": -1.0, "round": 0, "global": None, "client": None}
+
+    for rnd in range(num_rounds):
+        if fraction_fit >= 1.0:
+            selected = client_ids
+        else:
+            m = max(1, int(round(fraction_fit * len(client_ids))))
+            selected = sorted(rng.choice(client_ids, size=m, replace=False).tolist(), key=int)
+
+        states, sizes = [], []
+        for c in selected:
+            scratch.load_state_dict({k: v.to(device) for k, v in personalized_state(c).items()})
+            _local_train(scratch, train_loaders[c], cfg, device, local_epochs, mu=mu)
+            client_state[c] = _clone_state(scratch)   # persist full state (incl this client's BN)
+            states.append(client_state[c]); sizes.append(train_sizes[c])
+            grad_steps += len(train_loaders[c]) * local_epochs
+
+        agg = fedavg_aggregate(states, sizes)
+        if keep_bn_local:
+            for k in global_state:                     # FedBN: aggregate only non-BN keys
+                if k not in bn_keys:
+                    global_state[k] = agg[k]
+        else:
+            global_state = agg
+        comm_cum += 2.0 * len(selected) * model_mb
+
+        val_accs = [eval_client(c, val_loaders[c])["accuracy"] for c in client_ids]
+        mean_val = float(np.mean(val_accs))
+        history.append({"round": rnd + 1, "mean_val_acc": mean_val,
+                        "comm_mb_cumulative": comm_cum,
+                        "epoch_equiv_cumulative": grad_steps / steps_per_epoch_equiv})
+        if verbose:
+            print(f"  round {rnd+1:>2}/{num_rounds}  mean_val_acc={mean_val:.4f}  "
+                  f"(~{grad_steps/steps_per_epoch_equiv:.1f} epoch-equiv, {comm_cum:.0f}MB)", flush=True)
+
+        if mean_val > best["val"]:
+            best = {"val": mean_val, "round": rnd + 1,
+                    "global": {k: v.clone() for k, v in global_state.items()},
+                    "client": ({c: {k: v.clone() for k, v in client_state[c].items()} for c in client_ids}
+                               if keep_bn_local else None)}
+
+    # restore best-by-val states, then evaluate per-client TEST once
+    if best["global"] is not None:
+        global_state = best["global"]
+        if keep_bn_local and best["client"] is not None:
+            client_state = best["client"]
+    per_client = []
+    for c in client_ids:
+        acc = eval_client(c, test_loaders[c])["accuracy"]
+        per_client.append({"client": c, "test_acc": acc, "n_train": train_sizes[c]})
+    test_accs = [p["test_acc"] for p in per_client]
+
+    summary = {
+        "algorithm": "fedbn" if keep_bn_local else ("fedprox" if mu > 0 else "fedavg"),
+        "keep_bn_local": keep_bn_local, "mu": mu, "norm": cfg.norm,
+        "best_round": best["round"], "best_mean_val_acc": best["val"],
+        "mean_test_acc": float(np.mean(test_accs)), "worst_test_acc": float(np.min(test_accs)),
+        "std_test_acc": float(np.std(test_accs)), "per_client_test": per_client,
+        "total_comm_mb": comm_cum, "epoch_equivalents": grad_steps / steps_per_epoch_equiv,
+        "rounds": num_rounds, "local_epochs": local_epochs,
+    }
+    return history, summary
