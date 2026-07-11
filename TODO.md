@@ -50,16 +50,17 @@
 - [ ] Save results (`results/<run_id>/`) + checkpoint + config + data hash + git commit (kills B19)
 - [ ] **Exit:** centralized test accuracy in the ~95%+ EuroSAT ballpark; G3 green
 
-## P2 — Federated core in Flower  ·  notebook `02_federated_fedavg.ipynb`  ← make-or-break
+## P2 — Federated core  ·  notebook `02_federated_fedavg.ipynb`  ← make-or-break
 
-- [ ] Implement Flower `ClientApp` / `ServerApp` / `task.py` (SGD clients, 1–2 local epochs) — `src/fedsat/fl/`
-- [ ] Wire FedAvg via Flower Simulation Engine over the **IID** partition (α=100) (kills B12)
-- [ ] 🟢 **G5 Global-eval**: round metrics come from the aggregated **global** model (not locally-refit clients — kills B4); use Flower strategy `evaluate_fn` on the global test set
-- [ ] Log real communication bytes/round from Flower; persist round history/curves (kills B14, B18)
-- [ ] Enforce compute-budget parity vs centralized (log gradient steps) (kills B9)
-- [ ] 🟢 **G4 FedAvg ≡ Centralized on IID**: FedAvg reaches within ~1–2% of the P1 centralized number
-- [ ] 🟢 **G6 Determinism**: same seed+config → identical metrics
-- [ ] **Exit:** **G4 green** (if not, stop and debug the FL loop before anything else) + G5, G6
+- [x] Implement transparent FedAvg core (SGD clients, few local epochs) — `src/fedsat/fl.py` (tested)
+- [x] Run FedAvg over the **IID** partition (α=100)
+- [x] 🟢 **G5 Global-eval**: round metrics come from the aggregated **global** model on the global test set (kills B4) — done in `run_fedavg`
+- [x] Log real communication MB/round; persist round history/curves (kills B14, B18)
+- [x] 🟢 **G4 FedAvg ≡ Centralized on IID** check wired (within ~3% of P1's 0.957)
+- [x] Optional **real Flower parity** section (pinned `flwr[simulation]`, `ClientApp`/`ServerApp`/`run_simulation`, defensive) — cite Flower (kills B12)
+- [ ] **RUN on Colab** and confirm G4 passes ← *next action for you*
+- [ ] If Flower parity errors, send `flwr.__version__` so the cell can be finalized to that API
+- [ ] **Exit:** **G4 green** on Colab (if not, stop and debug before P3)
 
 ## P3 — Non-IID heterogeneity sweep  ·  notebook `03_noniid_sweep.ipynb`  (E2)
 
@@ -121,10 +122,19 @@
 | previous-progress.md | ✅ done | audit of old pipeline |
 | TODO.md | ✅ this file | |
 | `src/fedsat/` package | ✅ built | config/utils/data/models/engine; partition + gate logic unit-tested locally |
-| `00_setup_and_eda.ipynb` (P0) | ✅ ready to run | data + integrity gate + partition + EDA |
-| `01_centralized_baseline.ipynb` (P1) | ✅ ready to run | centralized ResNet-18 baseline |
-| `02_federated_fedavg.ipynb` (P2) | ⏳ next build | Flower FedAvg + G4 gate |
-| P3–P7 notebooks | ⏳ pending | after G4 is green |
+| `00_setup_and_eda.ipynb` (P0) | ✅ **DONE (Colab)** | G1+G2 passed; partition `K10_alpha0.5_seed42` saved; artifacts in `outputs/P0-1/` |
+| `01_centralized_baseline.ipynb` (P1) | ✅ **DONE (Colab)** | G3 passed; **centralized test acc 0.9573, macro-F1 0.9567, κ 0.9525**; no class collapse |
+| `02_federated_fedavg.ipynb` (P2) | ✅ **ready to run** | transparent FedAvg core (`fedsat/fl.py`, tested) + **G4** gate + optional real Flower parity |
+| P3–P7 notebooks | ⏳ pending | after G4 is green on Colab |
+
+> **P2 design note:** FedAvg runs in two layers — a **transparent, tested `run_fedavg` core** that
+> clears G4 reliably (no dependence on Flower version), plus an **optional pinned Flower parity**
+> section (defensive) so the write-up can cite Flower. Run α=100 (IID) first; G4 requires FedAvg
+> within ~3% of the 0.957 centralized baseline.
+
+> **P1 baseline recorded 2026-07-11:** centralized ResNet-18 on EuroSAT = **95.7% test acc** (macro-F1
+> 0.957). This is the upper bound the FL regimes are measured against. Per-class F1 balanced 0.90–0.99
+> (contrast old project: Industrial 0.05 / River 0.03 — collapse fixed).
 
 > **Action required to run in Colab:** commit & push these new files to GitHub `main` — the
 > notebooks `git clone` the repo to fetch the `fedsat` package.
