@@ -64,11 +64,14 @@
 
 ## P3 — Non-IID heterogeneity sweep  ·  notebook `03_noniid_sweep.ipynb`  (E2)
 
-- [ ] Generate partitions for α ∈ {100, 1.0, 0.5, 0.1}, K=10 (P0 partitioner)
-- [ ] Run regimes {centralized, local-only, FedAvg, FedProx} across α, ≥3 seeds
-- [ ] Add FedProx strategy (proximal μ)
-- [ ] Plot accuracy vs α; per-client (worst-client) accuracy; convergence curves
-- [ ] **Exit:** expected "accuracy degrades as α↓" curve reproduced; local-only < FedAvg on skew
+- [x] Add **FedProx** (proximal μ) to the FL core — `fedsat/fl.py` (`run_fedavg(..., mu=...)`, tested)
+- [x] Add **centralized** + **local-only** regime runners — `fedsat/regimes.py` (tested)
+- [x] Resumable sweep over α ∈ {100, 1.0, 0.5, 0.1}, K=10 (partitions cached; combos skipped if done)
+- [x] Regimes {centralized, local-only, FedAvg, FedProx}; local-only reports global-test + own-test
+- [x] Plot accuracy vs α; worst-client; save sweep tables (CSV)
+- [ ] **RUN on Colab** (resumable; ~few hours, 1 seed) ← *next action for you*
+- [ ] Scale `SEEDS` to 3 for confidence intervals (final paper)
+- [ ] **Exit:** "accuracy degrades as α↓" reproduced; local-only global-test < FedAvg under skew
 
 ## P4 — Proposed method: Personalized FTL  ·  notebook `04_proposed_pftl.ipynb`  (E4, E5)
 
@@ -124,8 +127,9 @@
 | `src/fedsat/` package | ✅ built | config/utils/data/models/engine; partition + gate logic unit-tested locally |
 | `00_setup_and_eda.ipynb` (P0) | ✅ **DONE (Colab)** | G1+G2 passed; partition `K10_alpha0.5_seed42` saved; artifacts in `outputs/P0-1/` |
 | `01_centralized_baseline.ipynb` (P1) | ✅ **DONE (Colab)** | G3 passed; **centralized test acc 0.9573, macro-F1 0.9567, κ 0.9525**; no class collapse |
-| `02_federated_fedavg.ipynb` (P2) | ✅ **ready to run** | transparent FedAvg core (`fedsat/fl.py`, tested) + **G4** gate + optional real Flower parity |
-| P3–P7 notebooks | ⏳ pending | after G4 is green on Colab |
+| `02_federated_fedavg.ipynb` (P2) | ✅ **G4 PASSED on Colab** | FedAvg IID 0.9765 vs centralized 0.9573; Flower integration verified (Ray backend blocked by Colab TF/protobuf pin — noted) |
+| `03_noniid_sweep.ipynb` (P3) | ✅ **ready to run** | resumable α-sweep, 4 regimes; FedProx + regimes in `fedsat/{fl,regimes}.py` (tested) |
+| P4–P7 notebooks | ⏳ pending | after P3 sweep runs |
 
 > **P2 design note:** FedAvg runs in two layers — a **transparent, tested `run_fedavg` core** that
 > clears G4 reliably (no dependence on Flower version), plus an **optional pinned Flower parity**
