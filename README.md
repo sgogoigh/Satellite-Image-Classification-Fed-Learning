@@ -39,7 +39,8 @@ Run the notebooks in order:
 | `notebooks/02_federated_fedavg.ipynb` | P2 | FedAvg (transparent core, evaluates global model each round) + **G4: FedAvg ≈ centralized on IID**; optional real Flower parity |
 | `notebooks/03_noniid_sweep.ipynb` | P3 | resumable Dirichlet-α sweep comparing centralized / local-only / FedAvg / FedProx |
 | `notebooks/04_proposed_pftl.ipynb` | P4 | proposed FedBN vs FedAvg/FedProx/GroupNorm under per-client sensor shift; BN-policy + shift ablations, multi-seed |
-| P5–P7 | … | scale/communication, cross-domain generalization, analysis |
+| `notebooks/05_scale_and_comm.ipynb` | P5 | scale (K∈{5,10,20,50}) + partial participation + uplink compression (top-k / 8-bit), accuracy-per-MB |
+| P6–P7 | … | cross-domain (leave-one-client-out) generalization, analysis |
 
 Notebooks 00 and 01 share the same `dataset / num_clients / alpha / seed` so 01 loads the exact
 partition saved by 00.
@@ -55,7 +56,7 @@ src/fedsat/
   data.py      # EuroSAT loader + integrity gate + Dirichlet partition + splits + transforms + SensorShift
   models.py    # ResNet-18/50 builder, norm policy, multispectral stem
   engine.py    # centralized/local train + full-metric evaluation
-  fl.py        # FedAvg / FedProx / FedBN (run_fedavg + run_federated, per-client eval, budget/comm)
+  fl.py        # FedAvg / FedProx / FedBN + uplink compression (run_fedavg / run_federated)
   regimes.py   # centralized + local-only baseline runners
 notebooks/     # thin Colab drivers (00, 01, 02, 03, 04, …)
 ```

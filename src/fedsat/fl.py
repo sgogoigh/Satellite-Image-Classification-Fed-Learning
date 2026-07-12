@@ -92,15 +92,67 @@ def fedavg_aggregate(states: list[dict], sizes: list[int]) -> dict:
     return agg
 
 
+def _compress_delta(delta, method: str, ratio: float):
+    """Compress one tensor's client->server delta and return ``(applied_delta, uplink_bytes)``.
+
+      * ``topk``  : keep the top ``ratio`` fraction of entries by magnitude (COO: 4B value + 4B idx).
+      * ``8bit``  : per-tensor symmetric int8 quantization (1B/elem + 4B scale).
+      * else      : no compression (4B/elem float32).
+
+    The compression genuinely perturbs the update, so its accuracy cost is real (not just accounting).
+    """
+    numel = delta.numel()
+    if method == "topk":
+        k = max(1, int(round(ratio * numel)))
+        flat = delta.flatten()
+        idx = torch.topk(flat.abs(), k).indices
+        comp = torch.zeros_like(flat)
+        comp[idx] = flat[idx]
+        return comp.view_as(delta), k * 8
+    if method in ("8bit", "qsgd8"):
+        maxv = float(delta.abs().max())
+        if maxv == 0.0:
+            return delta.clone(), numel + 4
+        scale = maxv / 127.0
+        q = torch.round(delta / scale).clamp_(-127, 127)
+        return q * scale, numel + 4
+    return delta.clone(), numel * 4
+
+
+def _compressed_aggregate(states, sizes, pre_global, method, ratio):
+    """FedAvg on **compressed deltas** (uplink). Returns ``(aggregated_state, uplink_bytes)``.
+    Float tensors are delta-compressed; integer buffers (e.g. num_batches_tracked) are copied."""
+    total = float(sum(sizes))
+    agg, up_bytes = {}, 0
+    for k, t0 in states[0].items():
+        if t0.is_floating_point():
+            acc = torch.zeros_like(t0, dtype=torch.float64)
+            for st, n in zip(states, sizes):
+                comp, nb = _compress_delta(st[k] - pre_global[k], method, ratio)
+                acc += comp.double() * (n / total)
+                up_bytes += nb
+            agg[k] = (pre_global[k].double() + acc).to(t0.dtype)
+        else:
+            j = int(max(range(len(sizes)), key=lambda i: sizes[i]))
+            agg[k] = states[j][k].clone()
+            up_bytes += states[j][k].numel() * states[j][k].element_size()
+    return agg, up_bytes
+
+
 def run_fedavg(cfg, hf_ds, partition, class_names,
                num_rounds: int, local_epochs: int, fraction_fit: float = 1.0,
-               mu: float = 0.0, verbose: bool = True):
+               mu: float = 0.0, compress: str = None, compress_ratio: float = 0.1,
+               verbose: bool = True):
     """Run FedAvg (``mu==0``) or **FedProx** (``mu>0``, proximal term) over the saved partition.
 
     Selection is by **global validation accuracy** (union of client val splits) — the reported
     TEST metrics come from the round with the best val accuracy, and the returned model is that
     same model (no test peeking; saved == reported). Compute is tracked in gradient steps and
     epoch-equivalents for iso-budget comparison with the centralized baseline.
+
+    ``compress`` (``None`` | ``'topk'`` | ``'8bit'``) applies real uplink compression at
+    ``compress_ratio`` (top-k fraction) and logs the reduced communication (P5/E8). ``compress=None``
+    is byte-for-byte the original behaviour used in P2/P3.
 
     Returns ``(global_model_at_best, history, summary)``.
     """
@@ -125,7 +177,8 @@ def run_fedavg(cfg, hf_ds, partition, class_names,
 
     total_train = sum(train_sizes.values())
     steps_per_epoch_equiv = max(1, int(np.ceil(total_train / cfg.batch_size)))
-    model_mb = state_nbytes(global_state) / (1024 ** 2)
+    model_bytes = state_nbytes(global_state)
+    model_mb = model_bytes / (1024 ** 2)
 
     rng = np.random.default_rng(cfg.seed + 999)
     history: list[dict] = []
@@ -141,6 +194,7 @@ def run_fedavg(cfg, hf_ds, partition, class_names,
             selected = sorted(rng.choice(client_ids, size=m, replace=False).tolist(), key=int)
 
         # ---- broadcast global -> local SGD (FedAvg) or proximal SGD (FedProx) per client ----
+        pre_global = {k: v.clone() for k, v in global_state.items()} if compress else None
         states, sizes = [], []
         for cid in selected:
             local_model.load_state_dict({k: v.to(device) for k, v in global_state.items()})
@@ -149,9 +203,13 @@ def run_fedavg(cfg, hf_ds, partition, class_names,
             sizes.append(train_sizes[cid])
             grad_steps_cum += steps_per_client[cid] * local_epochs
 
-        # ---- aggregate (FedAvg) ----
-        global_state = fedavg_aggregate(states, sizes)
-        comm_round = 2.0 * len(selected) * model_mb            # download + upload of the shared model
+        # ---- aggregate (FedAvg); compress the uplink if requested ----
+        if compress:
+            global_state, up_bytes = _compressed_aggregate(states, sizes, pre_global, compress, compress_ratio)
+        else:
+            global_state = fedavg_aggregate(states, sizes)
+            up_bytes = len(selected) * model_bytes
+        comm_round = (up_bytes + len(selected) * model_bytes) / (1024 ** 2)   # compressed uplink + full downlink
         comm_cum += comm_round
 
         # ---- evaluate the GLOBAL model: val (for selection) + test (for reporting/curve) ----
@@ -184,7 +242,8 @@ def run_fedavg(cfg, hf_ds, partition, class_names,
     summary = {
         "select_by": "val",
         "algorithm": "fedprox" if mu > 0 else "fedavg",
-        "mu": mu,
+        "mu": mu, "compress": compress, "compress_ratio": compress_ratio,
+        "num_clients": len(client_ids), "fraction_fit": fraction_fit,
         "best_round": best["round"],
         "best_val_accuracy": best["val_acc"],
         "test_accuracy_at_best": best["test_metrics"]["accuracy"],

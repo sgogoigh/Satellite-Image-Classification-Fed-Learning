@@ -86,9 +86,12 @@
 
 ## P5 — Scale & communication  ·  notebook `05_scale_and_comm.ipynb`  (E3, E8)
 
-- [ ] E3 scale: K ∈ {5,10,20,50} × `fraction_fit` ∈ {0.2,0.5,1.0} (demonstrates continent-scale feasibility)
-- [ ] E8 communication: none / top-k sparsification / 8-bit quantization; accuracy-per-MB curves (kills B14 claim gap)
-- [ ] **Exit:** scale demonstrated with partial participation; communication trade-off curves produced
+- [x] E3 scale: K ∈ {5,10,20,50} (full participation) — accuracy + total comm vs K
+- [x] E3 partial participation: `fraction_fit` ∈ {0.2,0.5,1.0} at K=20
+- [x] E8 real uplink compression: none / top-k (10%,1%) / 8-bit in `fedsat/fl.py` (`run_fedavg(compress=...)`, tested) — accuracy-per-MB curve (kills B14 claim gap)
+- [x] Resumable per `(K, fraction_fit, compression, seed)`; runs deduplicated across studies
+- [ ] **RUN on Colab** (needs GPU; ~9 configs at 1 seed, resumable) ← *when a GPU is available*
+- [ ] **Exit:** scale + partial-participation demonstrated; communication trade-off curves produced
 
 ## P6 — Cross-domain generalization  ·  notebook `06_loco_generalization.ipynb`  (E7, opt. E6, E9)
 
@@ -130,8 +133,9 @@
 | `01_centralized_baseline.ipynb` (P1) | ✅ **DONE (Colab)** | G3 passed; **centralized test acc 0.9573, macro-F1 0.9567, κ 0.9525**; no class collapse |
 | `02_federated_fedavg.ipynb` (P2) | ✅ **G4 PASSED on Colab** | FedAvg IID 0.9765 vs centralized 0.9573; Flower integration verified (Ray backend blocked by Colab TF/protobuf pin — noted) |
 | `03_noniid_sweep.ipynb` (P3) | ✅ **RAN on Colab** | FedAvg 0.975→0.845 as α↓; FedProx +7pt at α=0.1; local-only global collapses 0.94→0.40 |
-| `04_proposed_pftl.ipynb` (P4) | ✅ **ready to run** | FedBN + sensor shift + BN-policy/shift ablations; `run_federated` + `SensorShift` in `fedsat/{fl,data}.py` (tested) |
-| P5–P7 notebooks | ⏳ pending | after P4 runs |
+| `04_proposed_pftl.ipynb` (P4) | ✅ **RAN on Colab** | FedBN 0.926 vs FedAvg 0.831 under sensor shift (+~9pt); ≈baselines when no shift. Shift-ON needs seeds 43,44 for CIs |
+| `05_scale_and_comm.ipynb` (P5) | ✅ **ready to run** (needs GPU) | scale K∈{5,10,20,50} + partial participation + real uplink compression (top-k/8-bit); `run_fedavg(compress=...)` tested |
+| P6–P7 notebooks | ⏳ pending | after P5 runs |
 
 > **P2 design note:** FedAvg runs in two layers — a **transparent, tested `run_fedavg` core** that
 > clears G4 reliably (no dependence on Flower version), plus an **optional pinned Flower parity**
