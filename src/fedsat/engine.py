@@ -60,9 +60,16 @@ def train_one_epoch(model, loader, optimizer, criterion, device,
 
 @torch.no_grad()
 def evaluate(model, loader, device, num_classes: int, class_names=None) -> dict:
-    """Full metric suite on whatever split `loader` holds (use the TEST loader for reports)."""
+    """Full metric suite on whatever split `loader` holds (use the TEST loader for reports).
+
+    Metrics are computed over the full ``range(num_classes)`` label space, so a client whose split
+    is missing some classes (expected under label skew) is still scored correctly — sklearn's benign
+    "y_pred contains classes not in y_true" warning in that case is suppressed.
+    """
+    import warnings
     from sklearn.metrics import (accuracy_score, f1_score, confusion_matrix,
                                   cohen_kappa_score, balanced_accuracy_score)
+    from sklearn.exceptions import UndefinedMetricWarning
 
     model.eval()
     preds, labs = [], []
@@ -76,14 +83,21 @@ def evaluate(model, loader, device, num_classes: int, class_names=None) -> dict:
     y_pred = np.concatenate(preds)
     y_true = np.concatenate(labs)
     labels_range = list(range(num_classes))
-    per_class = f1_score(y_true, y_pred, average=None, labels=labels_range, zero_division=0)
-    cm = confusion_matrix(y_true, y_pred, labels=labels_range)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*y_pred contains classes not in y_true.*")
+        warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
+        per_class = f1_score(y_true, y_pred, average=None, labels=labels_range, zero_division=0)
+        cm = confusion_matrix(y_true, y_pred, labels=labels_range)
+        acc = float(accuracy_score(y_true, y_pred))
+        bacc = float(balanced_accuracy_score(y_true, y_pred))
+        macro = float(f1_score(y_true, y_pred, average="macro", labels=labels_range, zero_division=0))
+        kappa = float(cohen_kappa_score(y_true, y_pred, labels=labels_range))
     out = {
         "n": int(y_true.size),
-        "accuracy": float(accuracy_score(y_true, y_pred)),
-        "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
-        "macro_f1": float(f1_score(y_true, y_pred, average="macro", labels=labels_range, zero_division=0)),
-        "cohen_kappa": float(cohen_kappa_score(y_true, y_pred, labels=labels_range)),
+        "accuracy": acc,
+        "balanced_accuracy": bacc,
+        "macro_f1": macro,
+        "cohen_kappa": kappa,
         "per_class_f1": {(class_names[c] if class_names else str(c)): float(per_class[c])
                          for c in range(num_classes)},
         "confusion_matrix": cm.tolist(),
