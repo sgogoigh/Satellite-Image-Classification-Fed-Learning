@@ -40,7 +40,8 @@ Run the notebooks in order:
 | `notebooks/03_noniid_sweep.ipynb` | P3 | resumable Dirichlet-α sweep comparing centralized / local-only / FedAvg / FedProx |
 | `notebooks/04_proposed_pftl.ipynb` | P4 | proposed FedBN vs FedAvg/FedProx/GroupNorm under per-client sensor shift; BN-policy + shift ablations, multi-seed |
 | `notebooks/05_scale_and_comm.ipynb` | P5 | scale (K∈{5,10,20,50}) + partial participation + uplink compression (top-k / 8-bit), accuracy-per-MB |
-| P6–P7 | … | cross-domain (leave-one-client-out) generalization, analysis |
+| `notebooks/06_loco_generalization.ipynb` | P6 | leave-one-region-out generalization to an unseen sensor + label-free AdaBN adaptation |
+| P7 | … | analysis: master results table, figures, report §5–§8 |
 
 Notebooks 00 and 01 share the same `dataset / num_clients / alpha / seed` so 01 loads the exact
 partition saved by 00.

@@ -371,3 +371,81 @@ def run_federated(cfg, hf_ds, partition, class_names, num_rounds, local_epochs,
         "rounds": num_rounds, "local_epochs": local_epochs,
     }
     return history, summary
+
+
+def _recompute_bn(model, loader, device, max_batches=None):
+    """AdaBN (Li et al. 2016): reset BatchNorm running stats and re-estimate them from the target
+    domain's *unlabeled* data via forward passes. Cheap, label-free test-time adaptation to a new
+    sensor — the natural fix for feature shift on a client that never trained."""
+    for m in model.modules():
+        if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+            m.reset_running_stats()
+            m.momentum = None                      # cumulative average over the target batches
+    model.train()
+    with torch.no_grad():
+        for i, (x, _) in enumerate(loader):
+            model(x.to(device))
+            if max_batches and i + 1 >= max_batches:
+                break
+    model.eval()
+
+
+def run_loco(cfg, hf_ds, partition, class_names, held_out, num_rounds, local_epochs,
+             mu: float = 0.0, client_transforms=None, adabn: bool = True, verbose: bool = False):
+    """Leave-One-Client-Out cross-domain generalization.
+
+    Trains a **global** FedAvg (``mu==0``) / FedProx (``mu>0``) model on all clients EXCEPT
+    ``held_out`` (round selection by mean validation over the training clients), then evaluates that
+    global model on the **held-out client's test set** — i.e. generalization to a region never seen
+    in training. With per-client sensor transforms, the held-out client is a genuinely novel domain.
+
+    If ``adabn`` is True, also reports accuracy after re-estimating BatchNorm statistics on the
+    held-out client's own *unlabeled train* data (test set never used for adaptation → no leakage).
+
+    Returns a dict with ``held_out_test_acc`` and (optionally) ``held_out_test_acc_adabn``.
+    """
+    device = cfg.device
+    ctf = client_transforms or {}
+    all_ids = sorted(partition["clients"], key=int)
+    train_clients = [c for c in all_ids if c != held_out]
+
+    train_loaders = {c: make_loader(hf_ds, partition["clients"][c]["train"], cfg, True,
+                                    client_transform=ctf.get(c)) for c in train_clients}
+    val_loaders = {c: make_loader(hf_ds, partition["clients"][c]["val"], cfg, False,
+                                  client_transform=ctf.get(c)) for c in train_clients}
+    sizes = {c: len(partition["clients"][c]["train"]) for c in train_clients}
+
+    ho_tf = ctf.get(held_out)
+    ho_adapt = make_loader(hf_ds, partition["clients"][held_out]["train"], cfg, False, client_transform=ho_tf)
+    ho_test = make_loader(hf_ds, partition["clients"][held_out]["test"], cfg, False, client_transform=ho_tf)
+
+    def new_model():
+        return build_model(cfg.backbone, cfg.num_classes, cfg.pretrained, cfg.in_channels, cfg.norm).to(device)
+
+    gmodel, lmodel = new_model(), new_model()
+    gstate = _clone_state(gmodel)
+    best = {"val": -1.0, "state": None}
+
+    for rnd in range(num_rounds):
+        states, ss = [], []
+        for c in train_clients:
+            lmodel.load_state_dict({k: v.to(device) for k, v in gstate.items()})
+            _local_train(lmodel, train_loaders[c], cfg, device, local_epochs, mu=mu)
+            states.append(_clone_state(lmodel)); ss.append(sizes[c])
+        gstate = fedavg_aggregate(states, ss)
+        gmodel.load_state_dict({k: v.to(device) for k, v in gstate.items()})
+        va = float(np.mean([evaluate(gmodel, val_loaders[c], device, cfg.num_classes, class_names)["accuracy"]
+                            for c in train_clients]))
+        if verbose:
+            print(f"    round {rnd+1}/{num_rounds}: mean train-client val={va:.4f}", flush=True)
+        if va > best["val"]:
+            best = {"val": va, "state": {k: v.clone() for k, v in gstate.items()}}
+
+    gmodel.load_state_dict({k: v.to(device) for k, v in best["state"].items()})
+    base = evaluate(gmodel, ho_test, device, cfg.num_classes, class_names)["accuracy"]
+    out = {"held_out": held_out, "mu": mu, "held_out_test_acc": base,
+           "held_out_test_acc_adabn": None, "best_train_val": best["val"]}
+    if adabn:
+        _recompute_bn(gmodel, ho_adapt, device)
+        out["held_out_test_acc_adabn"] = evaluate(gmodel, ho_test, device, cfg.num_classes, class_names)["accuracy"]
+    return out

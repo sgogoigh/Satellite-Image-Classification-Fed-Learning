@@ -95,10 +95,12 @@
 
 ## P6 — Cross-domain generalization  ·  notebook `06_loco_generalization.ipynb`  (E7, opt. E6, E9)
 
-- [ ] E7 leave-one-client-out: train on K−1 clients, evaluate global model on unseen client test — `src/fedsat/eval/loco.py`
-- [ ] E6 (optional) multispectral: EuroSAT_MSI 13-band + MS stem; RGB vs MS (kills B15 or delete claim)
-- [ ] E9 (optional, Track B) multi-dataset cross-domain: EuroSAT+AID+NWPU+UC-Merced under shared taxonomy — `src/fedsat/data/taxonomy.py`; leave-one-domain-out
-- [ ] **Exit:** participating vs unseen-client generalization gap quantified
+- [x] E7 leave-one-client-out: `run_loco` in `fedsat/fl.py` — train global on K−1 regions, eval on unseen region test (tested)
+- [x] **AdaBN** test-time BN re-estimation on the unseen region's unlabeled data (`_recompute_bn`) — label-free feature-shift fix, ties to P4 BN theme
+- [x] K=5 leave-one-region-out × {FedAvg, FedProx} × {base, +AdaBN}, under sensor shift; resumable; per-region + averaged results
+- [ ] **RUN on Colab** (needs GPU; ~10 trainings at 1 seed, resumable) ← *when a GPU is available*
+- [ ] E6 (optional) multispectral EuroSAT_MSI; E9 (optional, Track B) multi-dataset — deferred unless requested
+- [ ] **Exit:** unseen-region generalization quantified; AdaBN recovery under shift shown
 
 ## P7 — Analysis, figures, writeup  ·  notebook `07_analysis_figures.ipynb`
 
@@ -135,7 +137,8 @@
 | `03_noniid_sweep.ipynb` (P3) | ✅ **RAN on Colab** | FedAvg 0.975→0.845 as α↓; FedProx +7pt at α=0.1; local-only global collapses 0.94→0.40 |
 | `04_proposed_pftl.ipynb` (P4) | ✅ **DONE (3 seeds, CIs)** | under shift: FedBN 0.910±0.016 vs FedAvg 0.839±0.007 / FedProx 0.852±0.011 — non-overlapping (+7/+6pt). GroupNorm control 0.784. Contribution validated |
 | `05_scale_and_comm.ipynb` (P5) | ✅ **ready to run** (needs GPU) | scale K∈{5,10,20,50} + partial participation + real uplink compression (top-k/8-bit); `run_fedavg(compress=...)` tested |
-| P6–P7 notebooks | ⏳ pending | after P5 runs |
+| `06_loco_generalization.ipynb` (P6) | ✅ **ready to run** (needs GPU) | leave-one-region-out + AdaBN; `run_loco`/`_recompute_bn` in `fedsat/fl.py` (tested) |
+| P7 notebook | ⏳ pending | after P5+P6 run |
 
 > **P2 design note:** FedAvg runs in two layers — a **transparent, tested `run_fedavg` core** that
 > clears G4 reliably (no dependence on Flower version), plus an **optional pinned Flower parity**
