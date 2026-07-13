@@ -81,8 +81,8 @@
 - [x] Metric = **mean per-client own-test accuracy** (defined for FedBN); val-based selection
 - [x] E4 BN-policy ablation {aggregate-BN, FedBN, GroupNorm} + E5 shift on/off, resumable, multi-seed
 - [x] Honest verdict cell (claim a win only where mean±std separates)
-- [ ] **RUN on Colab** (resumable; ~3–4 h at 3 seeds; preview with `SEEDS=[42]`) ← *next action for you*
-- [ ] **Exit:** FedBN's advantage under feature shift isolated with separated CIs — or reported honestly if not
+- [x] **RAN on Colab — 3 seeds complete.** Under sensor shift: **FedBN 0.910±0.016 vs FedAvg 0.839±0.007 (+7.1pt) / FedProx 0.852±0.011 (+5.8pt)**, non-overlapping; per-seed gaps all positive (+5.3/+6.6/+9.4pt). GroupNorm control 0.784 confirms *personalized* BN is the mechanism; FedBN+Prox≈FedBN (proximal adds nothing). Honest cost: ~1.6pt when no shift.
+- [x] **Exit MET:** FedBN's advantage under feature shift isolated with separated CIs — this is the contribution.
 
 ## P5 — Scale & communication  ·  notebook `05_scale_and_comm.ipynb`  (E3, E8)
 
@@ -133,7 +133,7 @@
 | `01_centralized_baseline.ipynb` (P1) | ✅ **DONE (Colab)** | G3 passed; **centralized test acc 0.9573, macro-F1 0.9567, κ 0.9525**; no class collapse |
 | `02_federated_fedavg.ipynb` (P2) | ✅ **G4 PASSED on Colab** | FedAvg IID 0.9765 vs centralized 0.9573; Flower integration verified (Ray backend blocked by Colab TF/protobuf pin — noted) |
 | `03_noniid_sweep.ipynb` (P3) | ✅ **RAN on Colab** | FedAvg 0.975→0.845 as α↓; FedProx +7pt at α=0.1; local-only global collapses 0.94→0.40 |
-| `04_proposed_pftl.ipynb` (P4) | ✅ **RAN on Colab** | FedBN 0.926 vs FedAvg 0.831 under sensor shift (+~9pt); ≈baselines when no shift. Shift-ON needs seeds 43,44 for CIs |
+| `04_proposed_pftl.ipynb` (P4) | ✅ **DONE (3 seeds, CIs)** | under shift: FedBN 0.910±0.016 vs FedAvg 0.839±0.007 / FedProx 0.852±0.011 — non-overlapping (+7/+6pt). GroupNorm control 0.784. Contribution validated |
 | `05_scale_and_comm.ipynb` (P5) | ✅ **ready to run** (needs GPU) | scale K∈{5,10,20,50} + partial participation + real uplink compression (top-k/8-bit); `run_fedavg(compress=...)` tested |
 | P6–P7 notebooks | ⏳ pending | after P5 runs |
 
