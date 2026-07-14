@@ -90,8 +90,9 @@
 - [x] E3 partial participation: `fraction_fit` ∈ {0.2,0.5,1.0} at K=20
 - [x] E8 real uplink compression: none / top-k (10%,1%) / 8-bit in `fedsat/fl.py` (`run_fedavg(compress=...)`, tested) — accuracy-per-MB curve (kills B14 claim gap)
 - [x] Resumable per `(K, fraction_fit, compression, seed)`; runs deduplicated across studies
-- [ ] **RUN on Colab** (needs GPU; ~9 configs at 1 seed, resumable) ← *when a GPU is available*
-- [ ] **Exit:** scale + partial-participation demonstrated; communication trade-off curves produced
+- [x] **RAN on Colab (num_workers=0 RAM fix).** Scale K5→50: 0.968→0.937, comm linear (6.4→64GB). Participation K=20: ff1.0 0.955 / ff0.5 0.943 (½ comm) / ff0.2 0.845. Compression K=10: 8-bit 0.967 (4× less uplink, lossless), top-k10% 0.949 (5×), top-k1% 0.871 (50×).
+- [x] Compression figure fixed to report **uplink** (downlink is full & dominates total) — recomputed post-hoc, no re-run
+- [x] **Exit MET:** scale + partial-participation + honest communication trade-off curves produced
 
 ## P6 — Cross-domain generalization  ·  notebook `06_loco_generalization.ipynb`  (E7, opt. E6, E9)
 
@@ -136,7 +137,7 @@
 | `02_federated_fedavg.ipynb` (P2) | ✅ **G4 PASSED on Colab** | FedAvg IID 0.9765 vs centralized 0.9573; Flower integration verified (Ray backend blocked by Colab TF/protobuf pin — noted) |
 | `03_noniid_sweep.ipynb` (P3) | ✅ **RAN on Colab** | FedAvg 0.975→0.845 as α↓; FedProx +7pt at α=0.1; local-only global collapses 0.94→0.40 |
 | `04_proposed_pftl.ipynb` (P4) | ✅ **DONE (3 seeds, CIs)** | under shift: FedBN 0.910±0.016 vs FedAvg 0.839±0.007 / FedProx 0.852±0.011 — non-overlapping (+7/+6pt). GroupNorm control 0.784. Contribution validated |
-| `05_scale_and_comm.ipynb` (P5) | ✅ **ready to run** (needs GPU) | scale K∈{5,10,20,50} + partial participation + real uplink compression (top-k/8-bit); `run_fedavg(compress=...)` tested |
+| `05_scale_and_comm.ipynb` (P5) | ✅ **RAN on Colab** | scale acc 0.968→0.937 (K 5→50), comm linear; ff=0.5 halves comm for ~1pt; 8-bit lossless (4× less uplink), top-k 1% 50× uplink for −9.5pt. RAM fixed via num_workers=0 |
 | `06_loco_generalization.ipynb` (P6) | ✅ **ready to run** (needs GPU) | leave-one-region-out + AdaBN; `run_loco`/`_recompute_bn` in `fedsat/fl.py` (tested) |
 | P7 notebook | ⏳ pending | after P5+P6 run |
 
