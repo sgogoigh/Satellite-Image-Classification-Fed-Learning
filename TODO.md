@@ -110,8 +110,9 @@
 - [x] Paired significance test for the P4 FedBN claim (per-seed diffs, 95% CI, paired t-test)
 - [x] Figures from saved data: α-curve, FedBN ablation, scale/participation/compression, LOCO+AdaBN, P1 confusion/per-class
 - [x] Auto-emits report-ready §5–§8 markdown with real numbers + honest limitations → `report_results.md`
-- [ ] **RUN on Colab CPU** after P6 finishes (re-run anytime; reflects current Drive results) ← *next*
-- [ ] **Exit:** every figure/number traces to a run under `results/`
+- [x] **RAN on Colab (P7 appended to combined P5/P6 notebook).** Master table, paired stats (FedBN−FedAvg +0.071, 95% CI +0.019..+0.123, p=0.028), 6 figures, report_results.md all produced.
+- [x] **Conference paper drafted** → `docs/` (IEEE 2-col A4 `.docx` + `paper.md` + `figures/`); official template is Strict-OOXML so docx is a faithful replica to paste into if byte-exact conformance needed.
+- [x] **Exit MET:** every figure/number traces to a run under `results/`.
 
 ---
 
@@ -141,7 +142,8 @@
 | `04_proposed_pftl.ipynb` (P4) | ✅ **DONE (3 seeds, CIs)** | under shift: FedBN 0.910±0.016 vs FedAvg 0.839±0.007 / FedProx 0.852±0.011 — non-overlapping (+7/+6pt). GroupNorm control 0.784. Contribution validated |
 | `05_scale_and_comm.ipynb` (P5) | ✅ **RAN on Colab** | scale acc 0.968→0.937 (K 5→50), comm linear; ff=0.5 halves comm for ~1pt; 8-bit lossless (4× less uplink), top-k 1% 50× uplink for −9.5pt. RAM fixed via num_workers=0 |
 | `06_loco_generalization.ipynb` (P6) | ✅ **RAN on Colab** | unseen-region FedAvg base 0.748; AdaBN worst region 0.45→0.71, variance halved (rescues hard region, mild cost on easy ones) |
-| `07_analysis_figures.ipynb` (P7) | ✅ **ready to run (CPU-only)** | master table + paired stats + all figures + report §5–§8 md; reads saved results, no GPU/dataset |
+| `07_analysis_figures.ipynb` (P7) | ✅ **RAN (CPU)** | master table + paired stats (FedBN vs FedAvg p=0.028) + all figures + report md |
+| **Conference paper** (`docs/`) | ✅ **DRAFTED** | IEEE 2-col A4 `.docx` + `paper.md` + figures; all numbers from executed runs |
 
 > **P2 design note:** FedAvg runs in two layers — a **transparent, tested `run_fedavg` core** that
 > clears G4 reliably (no dependence on Flower version), plus an **optional pinned Flower parity**
