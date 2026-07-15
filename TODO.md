@@ -103,13 +103,15 @@
 - [ ] E6 (optional) multispectral EuroSAT_MSI; E9 (optional, Track B) multi-dataset — deferred unless requested
 - [ ] **Exit:** unseen-region generalization quantified; AdaBN recovery under shift shown
 
-## P7 — Analysis, figures, writeup  ·  notebook `07_analysis_figures.ipynb`
+## P7 — Analysis, figures, writeup  ·  notebook `07_analysis_figures.ipynb`  (CPU-only, no GPU/dataset)
 
-- [ ] Aggregate all runs over seeds; master results table with mean ± 95% CI
-- [ ] Figures: accuracy-vs-α, convergence-vs-round, per-region bars, communication, confusion matrices
-- [ ] 🟢 **G7 Budget parity** and 🟢 **G8 No-leak diagnostics** verified across the final result set
-- [ ] Rewrite report §5–§8 from the **new** numbers; remove every unsupported claim; write honest limitations (PLAN §16)
-- [ ] **Exit:** every figure/number in the writeup traces to a run under `results/`
+- [x] Reads P1–P6 saved result files from Drive (defensive: skips phases not yet run)
+- [x] Master results table (per-phase headline; P4 with mean ± 95% CI) → `master_results.csv`
+- [x] Paired significance test for the P4 FedBN claim (per-seed diffs, 95% CI, paired t-test)
+- [x] Figures from saved data: α-curve, FedBN ablation, scale/participation/compression, LOCO+AdaBN, P1 confusion/per-class
+- [x] Auto-emits report-ready §5–§8 markdown with real numbers + honest limitations → `report_results.md`
+- [ ] **RUN on Colab CPU** after P6 finishes (re-run anytime; reflects current Drive results) ← *next*
+- [ ] **Exit:** every figure/number traces to a run under `results/`
 
 ---
 
@@ -138,8 +140,8 @@
 | `03_noniid_sweep.ipynb` (P3) | ✅ **RAN on Colab** | FedAvg 0.975→0.845 as α↓; FedProx +7pt at α=0.1; local-only global collapses 0.94→0.40 |
 | `04_proposed_pftl.ipynb` (P4) | ✅ **DONE (3 seeds, CIs)** | under shift: FedBN 0.910±0.016 vs FedAvg 0.839±0.007 / FedProx 0.852±0.011 — non-overlapping (+7/+6pt). GroupNorm control 0.784. Contribution validated |
 | `05_scale_and_comm.ipynb` (P5) | ✅ **RAN on Colab** | scale acc 0.968→0.937 (K 5→50), comm linear; ff=0.5 halves comm for ~1pt; 8-bit lossless (4× less uplink), top-k 1% 50× uplink for −9.5pt. RAM fixed via num_workers=0 |
-| `06_loco_generalization.ipynb` (P6) | ✅ **ready to run** (needs GPU) | leave-one-region-out + AdaBN; `run_loco`/`_recompute_bn` in `fedsat/fl.py` (tested) |
-| P7 notebook | ⏳ pending | after P5+P6 run |
+| `06_loco_generalization.ipynb` (P6) | ✅ **running on Colab** | leave-one-region-out + AdaBN; `run_loco`/`_recompute_bn` in `fedsat/fl.py` (tested) |
+| `07_analysis_figures.ipynb` (P7) | ✅ **ready to run (CPU-only)** | master table + paired stats + all figures + report §5–§8 md; reads saved results, no GPU/dataset |
 
 > **P2 design note:** FedAvg runs in two layers — a **transparent, tested `run_fedavg` core** that
 > clears G4 reliably (no dependence on Flower version), plus an **optional pinned Flower parity**

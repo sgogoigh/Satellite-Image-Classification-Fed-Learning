@@ -34,7 +34,17 @@ def load_eurosat(hf_repo: str = "blanchon/EuroSAT_RGB", cache_dir: Optional[str]
     'image' and 'label' columns, ``class_names`` is read from the label ``ClassLabel``
     feature, and ``labels`` is an int numpy array aligned with ``hf_ds`` row order.
     """
+    import os
     from datasets import load_dataset, concatenate_datasets
+
+    # Use the resilient chunked downloader when available — plain unauthenticated HF downloads of the
+    # ~105 MB parquet frequently stall mid-stream on Colab; hf_transfer retries/parallelizes chunks.
+    try:
+        import hf_transfer  # noqa: F401
+        os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
+    except Exception:
+        pass
+    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
 
     dd = load_dataset(hf_repo, cache_dir=cache_dir)
     # Concatenate whatever splits exist so we control the split ourselves (PLAN §4).

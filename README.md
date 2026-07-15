@@ -41,7 +41,7 @@ Run the notebooks in order:
 | `notebooks/04_proposed_pftl.ipynb` | P4 | proposed FedBN vs FedAvg/FedProx/GroupNorm under per-client sensor shift; BN-policy + shift ablations, multi-seed |
 | `notebooks/05_scale_and_comm.ipynb` | P5 | scale (K∈{5,10,20,50}) + partial participation + uplink compression (top-k / 8-bit), accuracy-per-MB |
 | `notebooks/06_loco_generalization.ipynb` | P6 | leave-one-region-out generalization to an unseen sensor + label-free AdaBN adaptation |
-| P7 | … | analysis: master results table, figures, report §5–§8 |
+| `notebooks/07_analysis_figures.ipynb` | P7 | **CPU-only** analysis: master table, paired stats, all figures, report §5–§8 (reads saved results, no GPU/dataset) |
 
 Notebooks 00 and 01 share the same `dataset / num_clients / alpha / seed` so 01 loads the exact
 partition saved by 00.
