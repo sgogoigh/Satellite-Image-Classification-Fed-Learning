@@ -99,9 +99,9 @@
 - [x] E7 leave-one-client-out: `run_loco` in `fedsat/fl.py` — train global on K−1 regions, eval on unseen region test (tested)
 - [x] **AdaBN** test-time BN re-estimation on the unseen region's unlabeled data (`_recompute_bn`) — label-free feature-shift fix, ties to P4 BN theme
 - [x] K=5 leave-one-region-out × {FedAvg, FedProx} × {base, +AdaBN}, under sensor shift; resumable; per-region + averaged results
-- [ ] **RUN on Colab** (needs GPU; ~10 trainings at 1 seed, resumable) ← *when a GPU is available*
+- [x] **RAN on Colab (10 runs, 5 regions × 2 methods).** FedAvg base 0.748 on unseen region (4/5 regions 0.73–0.88 out-of-the-box). **AdaBN: mean +5pt, worst region 0.45→0.71 (+26pt), variance halved (0.18→0.08)** — rescues the hard region; mildly hurts already-easy regions (2,3). BN stats are the feature-shift lever (FedBN participating, AdaBN unseen).
 - [ ] E6 (optional) multispectral EuroSAT_MSI; E9 (optional, Track B) multi-dataset — deferred unless requested
-- [ ] **Exit:** unseen-region generalization quantified; AdaBN recovery under shift shown
+- [x] **Exit MET:** unseen-region generalization quantified; AdaBN worst-case/stability recovery shown
 
 ## P7 — Analysis, figures, writeup  ·  notebook `07_analysis_figures.ipynb`  (CPU-only, no GPU/dataset)
 
@@ -140,7 +140,7 @@
 | `03_noniid_sweep.ipynb` (P3) | ✅ **RAN on Colab** | FedAvg 0.975→0.845 as α↓; FedProx +7pt at α=0.1; local-only global collapses 0.94→0.40 |
 | `04_proposed_pftl.ipynb` (P4) | ✅ **DONE (3 seeds, CIs)** | under shift: FedBN 0.910±0.016 vs FedAvg 0.839±0.007 / FedProx 0.852±0.011 — non-overlapping (+7/+6pt). GroupNorm control 0.784. Contribution validated |
 | `05_scale_and_comm.ipynb` (P5) | ✅ **RAN on Colab** | scale acc 0.968→0.937 (K 5→50), comm linear; ff=0.5 halves comm for ~1pt; 8-bit lossless (4× less uplink), top-k 1% 50× uplink for −9.5pt. RAM fixed via num_workers=0 |
-| `06_loco_generalization.ipynb` (P6) | ✅ **running on Colab** | leave-one-region-out + AdaBN; `run_loco`/`_recompute_bn` in `fedsat/fl.py` (tested) |
+| `06_loco_generalization.ipynb` (P6) | ✅ **RAN on Colab** | unseen-region FedAvg base 0.748; AdaBN worst region 0.45→0.71, variance halved (rescues hard region, mild cost on easy ones) |
 | `07_analysis_figures.ipynb` (P7) | ✅ **ready to run (CPU-only)** | master table + paired stats + all figures + report §5–§8 md; reads saved results, no GPU/dataset |
 
 > **P2 design note:** FedAvg runs in two layers — a **transparent, tested `run_fedavg` core** that
